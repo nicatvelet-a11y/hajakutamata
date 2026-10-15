@@ -729,7 +729,7 @@ async def sorgu_cmd(ctx: commands.Context):
             await ctx.send(embed=e_err("Bu komutu sadece kurucu kullanabilir.")); return
         aciklamalar = "\n".join(f"**›** **{lbl}** — {ac}" for _, lbl, _, ac in SORGULAR)
         emb = discord.Embed(
-            title="Hapsetme Sorgu  •  Sorgu Paneli",
+            title="Hapsetme Sxrgu  •  Sxrgu P4neli",
             description=(
                 "Butonlardan sorgu türünü seç.\n"
                 "Sonuç **DM**'ine TXT olarak gelir.\n"
