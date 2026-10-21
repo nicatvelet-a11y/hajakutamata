@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Hapsetme Sorgu Discord Botu
 """
@@ -10,6 +10,7 @@ import asyncio
 import io
 import json
 import os
+import random
 import secrets
 import string
 import time
@@ -39,7 +40,9 @@ YETKILI_ROL_ID = 1448711918066864221
 ABONE_ROL_ID   = 1444747455282282660
 MOD_ROL_IDS    = [1486817521427419289, 1521257885537927310, 1509987771110920364]
 
-KEY_SURE = 25  # dakika
+
+
+# Netflix cooldown: { user_id: { "pc": timestamp, "mobil": timestamp } }
 
 C_BRAND   = 0x5865f2
 C_SUCCESS = 0x57f287
@@ -133,6 +136,15 @@ def sv_k():    _save("kurucular.json",    kurucular)
 def sv_keys(): _save("keys.json",         keys_db)
 def sv_sin():  _save("sinirizsiz.json",   sinirizsiz)
 def sv_tc():   _save("ticket_count.json", ticket_count)
+netflix_pc_stok:     list = _load("netflix_pc.json",    [])
+netflix_mobil_stok:  list = _load("netflix_mobil.json", [])
+
+def sv_npc():   _save("netflix_pc.json",    netflix_pc_stok)
+def sv_nmob():  _save("netflix_mobil.json", netflix_mobil_stok)
+
+# Netflix cooldown: { user_id: { 'pc': timestamp, 'mobil': timestamp } }
+_netflix_cd: dict = {}
+NETFLIX_CD_SURE = 10800  # 3 saat (saniye)
 
 # ══════════════════════════════════════════════════════
 # KIMLIK (SAHTE KIMLIK KARTI) — ADIM ADIM OLUSTURMA RUNTIME STATE
@@ -847,9 +859,164 @@ async def mid_cmd(ctx: commands.Context, discord_id: str = ""):
         print(f"[mid HATA] {e}")
         await ctx.send(embed=e_err(f"Hata oluştu: `{e}`"))
 
+
 # ══════════════════════════════════════════════════════
-# SORGU PANELİ
+# NETFLIX STOK KOMUTLARI
 # ══════════════════════════════════════════════════════
+
+@bot.command(name="neftlixpc")
+async def neftlix_pc_cmd(ctx: commands.Context, *, hesap: str = ""):
+    try:
+        if not is_kurucu(ctx):
+            await ctx.send(embed=e_err("Bu komutu sadece kurucu kullanabilir.")); return
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send(embed=e_err("Bu komutu sadece DM'den kullanabilirsin.")); return
+        if not hesap.strip():
+            await ctx.send(embed=e_err("Kullanim: `a!neftlixpc <hesap bilgisi>`")); return
+        netflix_pc_stok.append(hesap.strip())
+        sv_npc()
+        emb = discord.Embed(
+            title="Netflix PC Stok Eklendi",
+            description=f"```\n{hesap.strip()}\n```",
+            color=C_SUCCESS,
+            timestamp=datetime.now(timezone.utc)
+        )
+        emb.add_field(name="Toplam PC Stok", value=str(len(netflix_pc_stok)), inline=True)
+        emb.set_footer(text=FOOTER)
+        await ctx.send(embed=emb)
+    except Exception as e:
+        print(f"[neftlixpc HATA] {e}")
+        await ctx.send(embed=e_err(f"Hata: `{e}`"))
+
+
+@bot.command(name="neftlixmobil")
+async def neftlix_mobil_cmd(ctx: commands.Context, *, hesap: str = ""):
+    try:
+        if not is_kurucu(ctx):
+            await ctx.send(embed=e_err("Bu komutu sadece kurucu kullanabilir.")); return
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send(embed=e_err("Bu komutu sadece DM'den kullanabilirsin.")); return
+        if not hesap.strip():
+            await ctx.send(embed=e_err("Kullanim: `a!neftlixmobil <hesap bilgisi>`")); return
+        netflix_mobil_stok.append(hesap.strip())
+        sv_nmob()
+        emb = discord.Embed(
+            title="Netflix Mobil Stok Eklendi",
+            description=f"```\n{hesap.strip()}\n```",
+            color=C_SUCCESS,
+            timestamp=datetime.now(timezone.utc)
+        )
+        emb.add_field(name="Toplam Mobil Stok", value=str(len(netflix_mobil_stok)), inline=True)
+        emb.set_footer(text=FOOTER)
+        await ctx.send(embed=emb)
+    except Exception as e:
+        print(f"[neftlixmobil HATA] {e}")
+        await ctx.send(embed=e_err(f"Hata: `{e}`"))
+
+
+@bot.command(name="stok")
+async def stok_cmd(ctx: commands.Context):
+    try:
+        if not is_kurucu(ctx):
+            await ctx.send(embed=e_err("Bu komutu sadece kurucu kullanabilir.")); return
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send(embed=e_err("Bu komutu sadece DM'den kullanabilirsin.")); return
+        emb = discord.Embed(
+            title="Netflix Stok Durumu",
+            color=C_BRAND,
+            timestamp=datetime.now(timezone.utc)
+        )
+        emb.add_field(
+            name=f"Netflix PC ({len(netflix_pc_stok)} adet)",
+            value="\n".join(f"`{i+1}.` {h}" for i, h in enumerate(netflix_pc_stok[:10])) or "Stok yok",
+            inline=False
+        )
+        emb.add_field(
+            name=f"Netflix Mobil ({len(netflix_mobil_stok)} adet)",
+            value="\n".join(f"`{i+1}.` {h}" for i, h in enumerate(netflix_mobil_stok[:10])) or "Stok yok",
+            inline=False
+        )
+        if len(netflix_pc_stok) > 10 or len(netflix_mobil_stok) > 10:
+            emb.set_footer(text=f"{FOOTER}  •  Ilk 10 gosteriliyor")
+        else:
+            emb.set_footer(text=FOOTER)
+        await ctx.send(embed=emb)
+    except Exception as e:
+        print(f"[stok HATA] {e}")
+        await ctx.send(embed=e_err(f"Hata: `{e}`"))
+
+
+@bot.command(name="stoksil")
+async def stoksil_cmd(ctx: commands.Context, *, hedef: str = ""):
+    try:
+        if not is_kurucu(ctx):
+            await ctx.send(embed=e_err("Bu komutu sadece kurucu kullanabilir.")); return
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send(embed=e_err("Bu komutu sadece DM'den kullanabilirsin.")); return
+        if not hedef.strip():
+            await ctx.send(embed=e_err("Kullanim: `a!stoksil <hesap bilgisi>`")); return
+
+        hedef = hedef.strip()
+        silindi = False
+
+        if hedef in netflix_pc_stok:
+            netflix_pc_stok.remove(hedef)
+            sv_npc()
+            silindi = True
+            tur = "PC"
+        elif hedef in netflix_mobil_stok:
+            netflix_mobil_stok.remove(hedef)
+            sv_nmob()
+            silindi = True
+            tur = "Mobil"
+
+        if silindi:
+            emb = discord.Embed(
+                title="Stok Silindi",
+                description=f"```\n{hedef}\n```",
+                color=C_SUCCESS,
+                timestamp=datetime.now(timezone.utc)
+            )
+            emb.add_field(name="Tur", value=f"Netflix {tur}", inline=True)
+            emb.add_field(name="Kalan PC", value=str(len(netflix_pc_stok)), inline=True)
+            emb.add_field(name="Kalan Mobil", value=str(len(netflix_mobil_stok)), inline=True)
+            emb.set_footer(text=FOOTER)
+            await ctx.send(embed=emb)
+        else:
+            await ctx.send(embed=e_err("Bu hesap stokta bulunamadi."))
+    except Exception as e:
+        print(f"[stoksil HATA] {e}")
+        await ctx.send(embed=e_err(f"Hata: `{e}`"))
+
+
+@bot.command(name="stoktemizle")
+async def stoktemizle_cmd(ctx: commands.Context):
+    try:
+        if not is_kurucu(ctx):
+            await ctx.send(embed=e_err("Bu komutu sadece kurucu kullanabilir.")); return
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send(embed=e_err("Bu komutu sadece DM'den kullanabilirsin.")); return
+
+        pc_adet    = len(netflix_pc_stok)
+        mobil_adet = len(netflix_mobil_stok)
+
+        netflix_pc_stok.clear()
+        netflix_mobil_stok.clear()
+        sv_npc()
+        sv_nmob()
+
+        emb = discord.Embed(
+            title="Stok Temizlendi",
+            color=C_SUCCESS,
+            timestamp=datetime.now(timezone.utc)
+        )
+        emb.add_field(name="Silinen PC Stok",    value=str(pc_adet),    inline=True)
+        emb.add_field(name="Silinen Mobil Stok", value=str(mobil_adet), inline=True)
+        emb.set_footer(text=FOOTER)
+        await ctx.send(embed=emb)
+    except Exception as e:
+        print(f"[stoktemizle HATA] {e}")
+        await ctx.send(embed=e_err(f"Hata: `{e}`"))
 
 SORGULAR = [
     # (sid, buton_etiketi, modal_basligi, aciklama)
@@ -874,6 +1041,8 @@ SORGULAR = [
     ("iban",       "IBAN Sorgu",   "IBAN Sorgu",         "IBAN banka ve hesap bilgisi"),
     ("cc",         "CC Check",     "Kredi Kartı Check",  "Kart doğrulama (Luhn + BIN)"),
     ("kimlik",     "Kimlik Olustur", "Sahte Kimlik Olustur", "Sahte TC kimlik kartı oluştur"),
+    ("nftpc",      "Netflix PC",     "Netflix PC Login",    "Netflix PC hesap bilgisi"),
+    ("nftmobil",   "Netflix Mobil",  "Netflix Mobil Login", "Netflix Mobil hesap bilgisi"),
 ]
 
 SORGU_MODAL_CFG = {
@@ -1012,6 +1181,60 @@ class SorguView(discord.ui.View):
                         await interaction.response.send_message(embed=e_ok("DM'ine kimlik olusturma basladi."), ephemeral=True)
                     except discord.Forbidden:
                         await interaction.response.send_message(embed=e_warn("DM'in kapalı. Ac tekrar dene."), ephemeral=True)
+                    return
+
+                # ── Netflix PC / Mobil ──
+                if sid in ("nftpc", "nftmobil"):
+                    uid = interaction.user.id
+                    # Kurucu kontrolü — kurucuya cooldown yok
+                    if not is_kurucu(uid):
+                        son   = _netflix_cd.get(uid, {}).get(sid, 0)
+                        kalan = NETFLIX_CD_SURE - (time.time() - son)
+                        if kalan > 0:
+                            saat = int(kalan // 3600)
+                            dk   = int((kalan % 3600) // 60)
+                            sn   = int(kalan % 60)
+                            await interaction.response.send_message(
+                                embed=e_warn(f"Bu butonu **{saat}sa {dk}dk {sn}sn** sonra tekrar kullanabilirsin."),
+                                ephemeral=True
+                            )
+                            return
+
+                    stok = netflix_pc_stok if sid == "nftpc" else netflix_mobil_stok
+                    tur  = "PC" if sid == "nftpc" else "Mobil"
+
+                    if not stok:
+                        await interaction.response.send_message(
+                            embed=e_err(f"Netflix {tur} stoku tukendi."),
+                            ephemeral=True
+                        )
+                        return
+
+                    hesap = random.choice(stok)  # Rastgele hesap ver, stoktan SİLME
+
+                    # Cooldown kaydet
+                    if uid not in _netflix_cd:
+                        _netflix_cd[uid] = {}
+                    _netflix_cd[uid][sid] = time.time()
+
+                    try:
+                        emb = discord.Embed(
+                            title=f"Netflix {tur} Login",
+                            description=f"```\n{hesap}\n```",
+                            color=C_BRAND,
+                            timestamp=datetime.now(timezone.utc)
+                        )
+                        emb.set_footer(text=FOOTER)
+                        await interaction.user.send(embed=emb)
+                        await interaction.response.send_message(
+                            embed=e_ok(f"Netflix {tur} hesabı DM'ine gönderildi."),
+                            ephemeral=True
+                        )
+                    except discord.Forbidden:
+                        await interaction.response.send_message(
+                            embed=e_warn("DM'in kapalı, hesap gönderilemedi."),
+                            ephemeral=True
+                        )
                     return
                 modal_baslik = next((m for s, _l, m, _a in SORGULAR if s == sid), lbl)
                 await interaction.response.send_modal(SorguModal(sid, modal_baslik))
@@ -2856,11 +3079,15 @@ async def on_ready():
     _d = _load("keys.json",         {})
     _s = _load("sinirizsiz.json",   [])
     _t = _load("ticket_count.json", {"count": 0})
+    _npc  = _load("netflix_pc.json",    [])
+    _nmob = _load("netflix_mobil.json", [])
 
-    kurucular.clear();    kurucular.extend(_k)
-    keys_db.clear();      keys_db.update(_d)
-    sinirizsiz.clear();   sinirizsiz.extend(_s)
-    ticket_count.clear(); ticket_count.update(_t)
+    kurucular.clear();         kurucular.extend(_k)
+    keys_db.clear();           keys_db.update(_d)
+    sinirizsiz.clear();        sinirizsiz.extend(_s)
+    ticket_count.clear();      ticket_count.update(_t)
+    netflix_pc_stok.clear();   netflix_pc_stok.extend(_npc)
+    netflix_mobil_stok.clear(); netflix_mobil_stok.extend(_nmob)
 
     if _USE_UPSTASH:
         print(f"[STORAGE] Upstash AKTIF — {len(keys_db)} key, {len(kurucular)} kurucu")
